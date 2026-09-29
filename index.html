@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="音声記録メモ">
+<meta name="theme-color" content="#2E6B5E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>音声記録メモ</title>
+<style>
+:root{
+  --paper:#EDEAE3; --card:#FFFFFF; --ink:#17191A; --ink-2:#5B6058;
+  --line:#CBC9BC; --voice:#2E6B5E; --voice-soft:#DCEAE5; --rec:#B23A2E; --rec-soft:#F5DEDA;
+  --warn:#8A6D1F; --warn-soft:#F2E7C9;
+  color-scheme: light;
+}
+:root:not([data-theme="light"]){ color-scheme: light dark; }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#121514; --card:#1C201E; --ink:#E9ECE7; --ink-2:#9BA39B;
+    --line:#343A33; --voice:#7FC9B5; --voice-soft:#1E3A34; --rec:#F0847A; --rec-soft:#3A211D;
+    --warn:#E3C066; --warn-soft:#3A3016;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121514; --card:#1C201E; --ink:#E9ECE7; --ink-2:#9BA39B;
+  --line:#343A33; --voice:#7FC9B5; --voice-soft:#1E3A34; --rec:#F0847A; --rec-soft:#3A211D;
+  --warn:#E3C066; --warn-soft:#3A3016;
+  color-scheme: dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,sans-serif;
+  font-size:17px;line-height:1.6;padding-bottom:92px;-webkit-text-size-adjust:100%;
+}
+.wrap{max-width:760px;margin:0 auto;padding:16px}
+button{font:inherit;color:inherit;border:none;background:none;cursor:pointer}
+input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--voice);outline-offset:2px}
+h1{font-size:20px;font-weight:700;margin:2px 0 2px}
+h2{font-size:14px;font-weight:600;color:var(--ink-2);margin:20px 0 8px}
+.sub{font-size:13.5px;color:var(--ink-2);margin:0 0 14px}
+.note{font-size:13.5px;color:var(--ink-2);margin:8px 0}
+.hidden{display:none!important}
+
+.stage{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;text-align:center;transition:background .15s,border-color .15s}
+.stage.busy{background:var(--voice-soft);border-color:var(--voice)}
+.stage.hot{background:var(--rec-soft);border-color:var(--rec)}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--ink-2);margin-right:8px;vertical-align:middle}
+.stage.busy .dot{background:var(--voice)}
+.stage.hot .dot{background:var(--rec);animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.status{font-size:14px;color:var(--ink-2)}
+.stage.busy .status{color:var(--voice)}
+.stage.hot .status{color:var(--rec)}
+.phase{font-size:24px;font-weight:700;margin:8px 0 4px;text-wrap:balance}
+.readout{font-size:15px;color:var(--ink-2)}
+.readout b{color:var(--ink);font-weight:700}
+
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{background:var(--voice);color:#fff;border-radius:12px;padding:14px 18px;font-weight:700}
+.btn.ghost{background:var(--card);border:1px solid var(--line);color:var(--ink);font-weight:400}
+.btn.stop{background:var(--rec)}
+.btn.danger{background:var(--rec-soft);color:var(--rec);border:1px solid var(--rec)}
+.btn[disabled]{opacity:.4}
+.big{display:block;width:100%;padding:22px 12px;font-size:20px;border-radius:16px;margin-top:12px}
+
+.warnbox{background:var(--warn-soft);border:1px solid var(--warn);color:var(--warn);border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:14px}
+
+.field{display:flex;flex-direction:column;gap:4px;flex:1 1 140px}
+.field label{font-size:12.5px;color:var(--ink-2)}
+.field input,.field select{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+
+.numgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+@media (max-width:520px){.numgrid{grid-template-columns:repeat(4,1fr)}}
+.numbtn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 0;font-weight:700;font-size:16px;text-align:center}
+.numbtn[aria-pressed=true]{background:var(--voice);border-color:var(--voice);color:#fff}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14.5px}
+.chip[aria-pressed=true]{background:var(--voice-soft);border-color:var(--voice);font-weight:700}
+.chip .rm{margin-left:8px;color:var(--ink-2)}
+
+.m{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px}
+.m .head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.m .tc{font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:13px}
+.m .badge{background:var(--voice-soft);color:var(--voice);border-radius:999px;padding:3px 10px;font-size:13px;font-weight:700}
+.m .subj{font-size:13px;color:var(--ink-2)}
+.m .x{margin-left:auto;color:var(--ink-2);font-size:20px;padding:2px 4px}
+.m textarea{width:100%;margin-top:8px;background:transparent;border:1px solid var(--line);border-radius:10px;padding:9px;min-height:48px;resize:vertical}
+
+.setrow{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:8px}
+.toggle{display:flex;align-items:center;gap:10px;cursor:pointer}
+.toggle input{width:20px;height:20px}
+
+pre#preview{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;white-space:pre-wrap;word-break:break-word;font:inherit;margin:0;font-size:15px}
+
+nav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;padding:14px 0;font-size:14.5px;color:var(--ink-2)}
+nav button[aria-pressed=true]{color:var(--voice);font-weight:700;box-shadow:inset 0 2px 0 var(--voice)}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:86px;z-index:40;background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:999px;font-size:14.5px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:92%;text-align:center}
+.toast.show{opacity:.95;pointer-events:auto}
+.toast .u{margin-left:10px;color:var(--voice-soft);font-weight:700;text-decoration:underline}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<section id="v-rec">
+  <h1>音声記録メモ</h1>
+  <p class="sub">「メモ」と言ってから、番号→教科→様子の順に話すと自動で記録します。</p>
+
+  <div id="unsupported" class="warnbox hidden">
+    この端末・ブラウザは音声認識に対応していません。iPadはSafari、Androidは最新のChromeでお試しください。「一覧」タブの「手動で追加」から直接入力もできます。
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="status"><span class="dot"></span><span id="statusTx">停止中</span></div>
+    <div class="phase" id="phaseTx">「開始」を押してください</div>
+    <div class="readout" id="readoutTx"></div>
+  </div>
+
+  <button class="btn big" id="toggleBtn">聞き取りを始める</button>
+  <button class="btn ghost big hidden" id="cancelBtn" style="margin-top:8px">いまの入力を取り消す</button>
+
+  <div id="lastWrap" class="hidden" style="margin-top:16px">
+    <h2>直前の記録</h2>
+    <div class="m" id="lastCard"></div>
+  </div>
+
+  <h2>ウェイクワードと教科</h2>
+  <p class="note" id="quickRef"></p>
+</section>
+
+<section id="v-list" class="hidden">
+  <div class="row" style="align-items:flex-end;margin-bottom:12px">
+    <div class="field">
+      <label for="rangeSel">対象</label>
+      <select id="rangeSel">
+        <option value="today">今日</option>
+        <option value="pick">日付を選ぶ</option>
+        <option value="all">すべて</option>
+      </select>
+    </div>
+    <div class="field hidden" id="pickWrap">
+      <label for="pickDate">日付</label>
+      <input type="date" id="pickDate">
+    </div>
+    <button class="btn ghost" id="addToggle" style="flex:0 0 auto">手動で追加</button>
+  </div>
+
+  <div class="m hidden" id="addForm">
+    <h2 style="margin-top:0">記録を手動で追加</h2>
+    <div class="row">
+      <div class="field">
+        <label for="addDate">日付</label>
+        <input type="date" id="addDate">
+      </div>
+      <div class="field">
+        <label for="addTime">時刻</label>
+        <input type="time" id="addTime">
+      </div>
+    </div>
+    <p class="note" style="margin:12px 0 4px">出席番号</p>
+    <div class="numgrid" id="addNums"></div>
+    <p class="note" style="margin:12px 0 4px">教科</p>
+    <div class="chips" id="addSubjects"></div>
+    <textarea id="addText" placeholder="様子を書く" style="width:100%;margin-top:10px;background:transparent;border:1px solid var(--line);border-radius:10px;padding:9px;min-height:60px"></textarea>
+    <button class="btn" id="addSave" style="margin-top:10px">追加する</button>
+  </div>
+
+  <div id="listBox"></div>
+  <p class="note" id="listEmpty">まだ記録がありません。</p>
+</section>
+
+<section id="v-out" class="hidden">
+  <div class="row" style="align-items:flex-end;margin-bottom:12px">
+    <div class="field">
+      <label for="rangeSel2">対象</label>
+      <select id="rangeSel2">
+        <option value="today">今日</option>
+        <option value="pick">日付を選ぶ</option>
+        <option value="all">すべて</option>
+      </select>
+    </div>
+    <div class="field hidden" id="pickWrap2">
+      <label for="pickDate2">日付</label>
+      <input type="date" id="pickDate2">
+    </div>
+  </div>
+  <div class="row">
+    <button class="btn" id="saveCsv">CSVを保存</button>
+    <button class="btn" id="saveJson">JSONを保存</button>
+    <button class="btn ghost" id="copyTxt">文章をコピー</button>
+  </div>
+  <p class="note">CSVはExcelでそのまま開けます。JSONは他のアプリへの取り込み用です。</p>
+  <h2>プレビュー</h2>
+  <pre id="preview"></pre>
+</section>
+
+<section id="v-set" class="hidden">
+  <h2 style="margin-top:0">ウェイクワード</h2>
+  <div class="row">
+    <div class="field" style="flex:1 1 200px">
+      <label for="wakeInput">この言葉を言うと記録を始めます</label>
+      <input type="text" id="wakeInput">
+    </div>
+    <button class="btn ghost" id="wakeSave" style="align-self:flex-end">保存</button>
+  </div>
+
+  <h2>読み上げで確認</h2>
+  <div class="setrow">
+    <label class="toggle" for="ttsToggle">番号・教科を声で読み上げて確認する</label>
+    <input type="checkbox" id="ttsToggle">
+  </div>
+
+  <h2>教科の一覧</h2>
+  <div class="chips" id="subjChips" style="margin-bottom:10px"></div>
+  <div class="row">
+    <div class="field" style="flex:1 1 200px">
+      <label for="newSubj">新しい教科名</label>
+      <input type="text" id="newSubj" placeholder="例：体育">
+    </div>
+    <button class="btn ghost" id="newSubjAdd" style="align-self:flex-end">追加</button>
+  </div>
+
+  <h2>使い方のメモ</h2>
+  <p class="note">出席番号は1〜8のみ対応しています。「さん」「3」「3番」のように話してください。教科を言わなければ、直前に使った教科のまま記録します。話した内容の書き起こしは自動なので、あとで一覧タブから文章を直せます。認識には通信環境が必要です。iPadはマイクの使用を許可してください。</p>
+
+  <h2 style="color:var(--rec)">記録の削除</h2>
+  <button class="btn danger" id="wipeBtn">すべての記録を消す</button>
+</section>
+
+</main>
+
+<nav>
+  <button id="t1" aria-pressed="true">記録</button>
+  <button id="t2" aria-pressed="false">一覧</button>
+  <button id="t3" aria-pressed="false">書き出し</button>
+  <button id="t4" aria-pressed="false">設定</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id);};
+
+var DEFAULT_SUBJECTS=["日生","せいかつかだい","自活","音楽","あそび","特活"];
+var KANJI_NUM={
+  "1":1,"いち":1,"一":1,
+  "2":2,"に":2,"二":2,
+  "3":3,"さん":3,"三":3,
+  "4":4,"よん":4,"し":4,"四":4,
+  "5":5,"ご":5,"五":5,
+  "6":6,"ろく":6,"六":6,
+  "7":7,"なな":7,"しち":7,"七":7,
+  "8":8,"はち":8,"八":8
+};
+
+var IS_ANDROID=/Android/i.test(navigator.userAgent);
+var IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+function buzz(pat){ try{ if(navigator.vibrate) navigator.vibrate(pat); }catch(e){} }
+function pad(n){ return ("0"+n).slice(-2); }
+function todayStr(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function nowTimeStr(){ var d=new Date(); return pad(d.getHours())+":"+pad(d.getMinutes()); }
+
+/* ---- sound ---- */
+var actx=null;
+function beep(freq,ms){
+  try{
+    if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==="suspended") actx.resume();
+    var o=actx.createOscillator(),g=actx.createGain();
+    o.type="sine"; o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001,actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.16,actx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+ms/1000);
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime+ms/1000+0.02);
+  }catch(e){}
+}
+
+var toastTimer=null;
+function toast(m){
+  var el=$("toast"); el.innerHTML=""; el.textContent=m; el.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ el.classList.remove("show"); },1800);
+}
+function undoToast(m,fn){
+  clearTimeout(toastTimer);
+  var el=$("toast"); el.innerHTML="";
+  el.appendChild(document.createTextNode(m));
+  var u=document.createElement("button"); u.className="u"; u.textContent="元に戻す";
+  u.addEventListener("click",function(){ el.classList.remove("show"); clearTimeout(toastTimer); fn(); });
+  el.appendChild(u);
+  el.classList.add("show");
+  toastTimer=setTimeout(function(){ el.classList.remove("show"); },5000);
+}
+
+/* ---- storage ---- */
+var subjects=[]; var wakeWord="メモ"; var ttsOn=true; var lastSubject=null; var records=[];
+function loadSettings(){
+  try{ var s=JSON.parse(localStorage.getItem("vk:subjects")||"null"); subjects=(s&&s.length)?s:DEFAULT_SUBJECTS.slice(); }catch(e){ subjects=DEFAULT_SUBJECTS.slice(); }
+  try{ wakeWord=localStorage.getItem("vk:wake")||"メモ"; }catch(e){ wakeWord="メモ"; }
+  try{ ttsOn=localStorage.getItem("vk:tts")!=="0"; }catch(e){ ttsOn=true; }
+  try{ lastSubject=localStorage.getItem("vk:lastSubject")||null; }catch(e){ lastSubject=null; }
+}
+function saveSubjects(){ try{ localStorage.setItem("vk:subjects",JSON.stringify(subjects)); }catch(e){} }
+function saveWake(){ try{ localStorage.setItem("vk:wake",wakeWord); }catch(e){} }
+function saveTts(){ try{ localStorage.setItem("vk:tts",ttsOn?"1":"0"); }catch(e){} }
+function saveLastSubject(){ try{ localStorage.setItem("vk:lastSubject",lastSubject||""); }catch(e){} }
+function loadRecords(){
+  try{ records=JSON.parse(localStorage.getItem("vk:records")||"[]")||[]; }catch(e){ records=[]; }
+}
+function saveRecords(){ try{ localStorage.setItem("vk:records",JSON.stringify(records)); }catch(e){} }
+
+/* ---- text helpers ---- */
+function normalize(s){ return String(s||"").replace(/[\s　、。,.!！?？「」『』]/g,""); }
+function isWake(text){
+  var n=normalize(text), w=normalize(wakeWord);
+  if(!w) return false;
+  return n.indexOf(w)===0;
+}
+function parseNumber(text){
+  var n=normalize(text);
+  var m=n.match(/([1-8])/);
+  if(m) return parseInt(m[1],10);
+  var keys=Object.keys(KANJI_NUM).sort(function(a,b){return b.length-a.length;});
+  for(var i=0;i<keys.length;i++){
+    var k=keys[i];
+    if(n===k||n===k+"ばん"||n===k+"番") return KANJI_NUM[k];
+  }
+  return null;
+}
+function matchSubject(text){
+  var n=normalize(text);
+  if(!n) return null;
+  for(var i=0;i<subjects.length;i++){ if(normalize(subjects[i])===n) return subjects[i]; }
+  for(var i=0;i<subjects.length;i++){
+    var sn=normalize(subjects[i]);
+    if(sn.length>=2 && (n.indexOf(sn)>=0||sn.indexOf(n)>=0)) return subjects[i];
+  }
+  return null;
+}
+
+/* ---- speech recognition state machine ---- */
+var Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+function supported(){ return !!Recognition; }
+var recognition=null, listening=false, manualStop=false, ttsBusy=false, restartFails=0;
+var phase="idle", curStudent=null, curSubject=null, buffer=[];
+var phaseTimer=null, silenceTimer=null, wakeLock=null;
+
+function buildRecognition(){
+  var r=new Recognition();
+  r.lang="ja-JP"; r.continuous=true; r.interimResults=false; r.maxAlternatives=1;
+  r.onresult=onResult; r.onerror=onRecError; r.onend=onRecEnd;
+  return r;
+}
+function startListening(){
+  if(!supported()){ toast("この端末では音声認識できません"); return; }
+  manualStop=false; restartFails=0;
+  try{ recognition=buildRecognition(); recognition.start(); }
+  catch(e){ toast("開始できませんでした"); return; }
+  listening=true; lockScreen(); updateStage();
+  $("toggleBtn").textContent="聞き取りを終える";
+}
+function stopListening(){
+  manualStop=true; listening=false;
+  try{ if(recognition) recognition.stop(); }catch(e){}
+  clearTimeout(phaseTimer); clearTimeout(silenceTimer);
+  phase="idle"; curStudent=null; curSubject=null; buffer=[];
+  releaseScreen(); updateStage();
+  $("toggleBtn").textContent="聞き取りを始める";
+}
+function onRecEnd(){
+  if(!listening||manualStop||ttsBusy) return;
+  restartFails++;
+  if(restartFails>8){
+    listening=false; releaseScreen();
+    toast("認識が不安定です。もう一度「開始」を押してください");
+    $("toggleBtn").textContent="聞き取りを始める";
+    updateStage();
+    return;
+  }
+  setTimeout(function(){
+    if(!listening||manualStop||ttsBusy) return;
+    try{ recognition=buildRecognition(); recognition.start(); }
+    catch(e){ onRecEnd(); }
+  },300);
+}
+function onRecError(e){
+  if(e && (e.error==="not-allowed"||e.error==="service-not-allowed")){
+    listening=false; releaseScreen();
+    toast("マイクの使用が許可されていません");
+    $("toggleBtn").textContent="聞き取りを始める";
+    updateStage();
+  }
+}
+function onResult(e){
+  for(var i=e.resultIndex;i<e.results.length;i++){
+    if(!e.results[i].isFinal) continue;
+    restartFails=0;
+    var text=(e.results[i][0]&&e.results[i][0].transcript||"").trim();
+    if(text) handlePhrase(text);
+  }
+}
+
+function handlePhrase(text){
+  if(isWake(text)){
+    if(phase==="content") finalizeRecord();
+    beginCapture();
+    return;
+  }
+  if(phase==="idle") return;
+  if(phase==="number"){
+    var n=parseNumber(text);
+    if(n){ curStudent=n; phase="subject"; resetPhaseTimer(8000); speakConfirm(n+"ばん"); updateStage(); }
+    else toast("番号が聞き取れませんでした（1〜8）");
+    return;
+  }
+  if(phase==="subject"){
+    var matched=matchSubject(text);
+    if(matched){
+      curSubject=matched; lastSubject=matched; saveLastSubject();
+      phase="content"; buffer=[]; resetSilenceTimer(); speakConfirm(matched); updateStage();
+    }else{
+      curSubject=lastSubject||subjects[0]||"記録";
+      phase="content"; buffer=[text]; resetSilenceTimer();
+      speakConfirm(curSubject); updateStage();
+    }
+    return;
+  }
+  if(phase==="content"){
+    buffer.push(text);
+    resetSilenceTimer();
+    updateStage();
+    return;
+  }
+}
+function beginCapture(){
+  clearTimeout(phaseTimer); clearTimeout(silenceTimer);
+  phase="number"; curStudent=null; curSubject=null; buffer=[];
+  beep(880,90); buzz(60);
+  resetPhaseTimer(8000);
+  updateStage();
+}
+function resetPhaseTimer(ms){
+  clearTimeout(phaseTimer);
+  phaseTimer=setTimeout(function(){
+    if(phase==="number"||phase==="subject"){
+      toast("反応がないため待機に戻りました");
+      phase="idle"; curStudent=null; curSubject=null; buffer=[];
+      updateStage();
+    }
+  },ms);
+}
+function resetSilenceTimer(){
+  clearTimeout(silenceTimer);
+  silenceTimer=setTimeout(finalizeRecord,6000);
+}
+function finalizeRecord(){
+  clearTimeout(silenceTimer); clearTimeout(phaseTimer);
+  if(phase==="content" && buffer.length && curStudent && curSubject){
+    var joined=buffer.join("。").trim();
+    if(joined && !/[。.！？!?]$/.test(joined)) joined+="。";
+    var rec={
+      id:"r"+Date.now()+"_"+Math.floor(Math.random()*1000),
+      date:todayStr(), time:nowTimeStr(),
+      student:curStudent, subject:curSubject, text:joined
+    };
+    records.unshift(rec); saveRecords();
+    beep(420,150); buzz([50,40,50]);
+    toast(rec.student+"番・"+rec.subject+"を記録しました");
+    renderLast(); renderListIfVisible();
+  }
+  phase="idle"; curStudent=null; curSubject=null; buffer=[];
+  updateStage();
+}
+function cancelCapture(){
+  clearTimeout(phaseTimer); clearTimeout(silenceTimer);
+  phase="idle"; curStudent=null; curSubject=null; buffer=[];
+  toast("取り消しました"); updateStage();
+}
+
+/* ---- text-to-speech confirm ---- */
+function speakConfirm(text){
+  if(!ttsOn || !window.speechSynthesis){ return; }
+  try{
+    ttsBusy=true;
+    try{ if(recognition) recognition.stop(); }catch(e){}
+    var u=new SpeechSynthesisUtterance(text);
+    u.lang="ja-JP"; u.rate=1.05; u.volume=0.85;
+    u.onend=u.onerror=function(){
+      ttsBusy=false;
+      if(listening && !manualStop){
+        try{ recognition=buildRecognition(); recognition.start(); }catch(e){}
+      }
+    };
+    speechSynthesis.speak(u);
+  }catch(e){ ttsBusy=false; }
+}
+
+/* ---- screen wake lock ---- */
+function lockScreen(){ try{ if(navigator.wakeLock) navigator.wakeLock.request("screen").then(function(w){ wakeLock=w; },function(){}); }catch(e){} }
+function releaseScreen(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){} }
+document.addEventListener("visibilitychange",function(){
+  if(document.visibilityState==="visible" && listening) lockScreen();
+});
+
+/* ---- stage rendering ---- */
+function updateStage(){
+  var st=$("stage");
+  st.classList.remove("busy","hot");
+  var statusTx="停止中", phaseTx="「開始」を押してください", readout="";
+  if(listening){
+    if(phase==="idle"){ statusTx="待機中"; phaseTx="「"+wakeWord+"」と言ってください"; st.classList.add("busy"); }
+    else if(phase==="number"){ statusTx="聞き取り中"; phaseTx="出席番号をどうぞ（1〜8）"; st.classList.add("busy"); }
+    else if(phase==="subject"){
+      statusTx="聞き取り中";
+      phaseTx="教科、または様子をどうぞ";
+      readout="番号：<b>"+curStudent+"番</b>"+(lastSubject?"　前回：<b>"+lastSubject+"</b>":"");
+      st.classList.add("busy");
+    }
+    else if(phase==="content"){
+      statusTx="記録中"; phaseTx="様子を話してください";
+      readout="<b>"+curStudent+"番・"+curSubject+"</b>";
+      st.classList.add("hot");
+    }
+  }
+  $("statusTx").textContent=statusTx;
+  $("phaseTx").textContent=phaseTx;
+  $("readoutTx").innerHTML=readout;
+  $("cancelBtn").classList.toggle("hidden", !(listening&&(phase==="number"||phase==="subject"||phase==="content")));
+}
+function renderLast(){
+  if(!records.length){ $("lastWrap").classList.add("hidden"); return; }
+  $("lastWrap").classList.remove("hidden");
+  var r=records[0];
+  var box=$("lastCard"); box.innerHTML="";
+  var head=document.createElement("div"); head.className="head";
+  var tc=document.createElement("span"); tc.className="tc"; tc.textContent=r.date+" "+r.time;
+  var b=document.createElement("span"); b.className="badge"; b.textContent=r.student+"番";
+  var s=document.createElement("span"); s.className="subj"; s.textContent=r.subject;
+  head.appendChild(tc); head.appendChild(b); head.appendChild(s);
+  var p=document.createElement("p"); p.style.margin="8px 0 0"; p.textContent=r.text;
+  box.appendChild(head); box.appendChild(p);
+}
+function renderQuickRef(){
+  $("quickRef").textContent="ウェイクワード「"+wakeWord+"」／教科："+subjects.join("・");
+}
+
+/* ---- list tab ---- */
+var range1="today", pick1=todayStr();
+function filteredRecords(rangeMode,pickDate){
+  var list=records.slice();
+  if(rangeMode==="today") list=list.filter(function(r){return r.date===todayStr();});
+  else if(rangeMode==="pick") list=list.filter(function(r){return r.date===pickDate;});
+  list.sort(function(a,b){ return (b.date+b.time).localeCompare(a.date+a.time); });
+  return list;
+}
+function renderList(){
+  var list=filteredRecords(range1,pick1);
+  var box=$("listBox"); box.innerHTML="";
+  $("listEmpty").classList.toggle("hidden", list.length>0);
+  list.forEach(function(r){
+    var d=document.createElement("div"); d.className="m";
+    var h=document.createElement("div"); h.className="head";
+    var tc=document.createElement("span"); tc.className="tc"; tc.textContent=(range1==="all"?r.date+" ":"")+r.time;
+    var b=document.createElement("span"); b.className="badge"; b.textContent=r.student+"番";
+    var s=document.createElement("span"); s.className="subj"; s.textContent=r.subject;
+    var x=document.createElement("button"); x.className="x"; x.textContent="×"; x.setAttribute("aria-label","削除");
+    x.addEventListener("click",function(){ deleteRecord(r.id); });
+    h.appendChild(tc); h.appendChild(b); h.appendChild(s); h.appendChild(x);
+    var ta=document.createElement("textarea"); ta.value=r.text;
+    ta.addEventListener("input",function(){ r.text=ta.value; });
+    ta.addEventListener("blur",function(){ saveRecords(); });
+    d.appendChild(h); d.appendChild(ta);
+    box.appendChild(d);
+  });
+}
+function renderListIfVisible(){ if(!$("v-list").classList.contains("hidden")) renderList(); }
+function deleteRecord(id){
+  var idx=records.findIndex(function(r){return r.id===id;});
+  if(idx<0) return;
+  var removed=records[idx];
+  records.splice(idx,1); saveRecords(); renderList();
+  undoToast("削除しました",function(){ records.splice(idx,0,removed); saveRecords(); renderList(); });
+}
+
+/* ---- manual add form ---- */
+var addNum=null, addSubj=null;
+function renderAddNums(){
+  var el=$("addNums"); el.innerHTML="";
+  for(var i=1;i<=8;i++){
+    (function(n){
+      var b=document.createElement("button"); b.className="numbtn"; b.textContent=n;
+      b.setAttribute("aria-pressed", addNum===n?"true":"false");
+      b.addEventListener("click",function(){ addNum=n; renderAddNums(); });
+      el.appendChild(b);
+    })(i);
+  }
+}
+function renderAddSubjects(){
+  var el=$("addSubjects"); el.innerHTML="";
+  subjects.forEach(function(s){
+    var b=document.createElement("button"); b.className="chip";
+    b.setAttribute("aria-pressed", addSubj===s?"true":"false");
+    b.textContent=s;
+    b.addEventListener("click",function(){ addSubj=s; renderAddSubjects(); });
+    el.appendChild(b);
+  });
+}
+function resetAddForm(){
+  addNum=null; addSubj=lastSubject||subjects[0]||null;
+  $("addDate").value=(range1==="pick"?pick1:todayStr());
+  $("addTime").value=nowTimeStr();
+  $("addText").value="";
+  renderAddNums(); renderAddSubjects();
+}
+
+/* ---- export tab ---- */
+var range2="today", pick2=todayStr();
+function exportRecords(){
+  return filteredRecords(range2,pick2).slice().sort(function(a,b){ return (a.date+a.time).localeCompare(b.date+b.time); });
+}
+function toCsv(list){
+  var rows=[["日付","時刻","出席番号","教科","様子"]];
+  list.forEach(function(r){ rows.push([r.date,r.time,r.student,r.subject,r.text]); });
+  var body=rows.map(function(row){
+    return row.map(function(v){
+      v=String(v==null?"":v);
+      if(/[",\n]/.test(v)) v='"'+v.replace(/"/g,'""')+'"';
+      return v;
+    }).join(",");
+  }).join("\r\n");
+  return "﻿"+body;
+}
+function toJsonStr(list){
+  return JSON.stringify({app:"onsei-kiroku",version:1,exported:new Date().toISOString(),records:list});
+}
+function buildTxt(list){
+  var byStudent={};
+  list.forEach(function(r){ (byStudent[r.student]=byStudent[r.student]||[]).push(r); });
+  var L=[]; L.push("【音声記録】"+(range2==="all"?"すべて":(range2==="pick"?pick2:todayStr())));
+  Object.keys(byStudent).sort(function(a,b){return a-b;}).forEach(function(k){
+    L.push(""); L.push(k+"番");
+    byStudent[k].forEach(function(r){
+      L.push("　"+(range2==="all"?r.date+" ":"")+r.time+"　"+r.subject+"　"+r.text);
+    });
+  });
+  if(!list.length) L.push("","（記録がありません）");
+  return L.join("\n");
+}
+function renderPreview(){ $("preview").textContent=buildTxt(exportRecords()); }
+
+/* ---- file save (works on a normal https site) ---- */
+var dl=null;
+if(window.claude&&claude.use){ claude.use("downloads").then(function(d){ dl=d; }); }
+function saveFile(fn,data,ok){
+  if(dl){
+    dl.save({filename:fn,data:data}).then(function(){ toast(ok); },function(err){
+      if(err&&err.code==="declined") return;
+      toast("保存できませんでした");
+    });
+    return;
+  }
+  try{
+    var type=/\.csv$/.test(fn)?"text/csv;charset=utf-8":"application/json;charset=utf-8";
+    var blob=(data instanceof Blob)?data:new Blob([data],{type:type});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url; a.download=fn; a.style.display="none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); document.body.removeChild(a); },1500);
+    toast(ok);
+  }catch(e){ toast("保存できませんでした"); }
+}
+
+/* ---- settings tab ---- */
+function renderSubjChips(){
+  var el=$("subjChips"); el.innerHTML="";
+  subjects.forEach(function(s){
+    var c=document.createElement("span"); c.className="chip";
+    c.textContent=s;
+    var rm=document.createElement("button"); rm.className="rm"; rm.textContent="×"; rm.setAttribute("aria-label","削除");
+    rm.addEventListener("click",function(){
+      if(subjects.length<=1){ toast("最低1つは必要です"); return; }
+      subjects=subjects.filter(function(x){return x!==s;});
+      saveSubjects(); renderSubjChips(); renderAddSubjects(); renderQuickRef();
+    });
+    c.appendChild(rm);
+    el.appendChild(c);
+  });
+}
+
+/* ---- tabs ---- */
+function tab(n){
+  $("v-rec").classList.toggle("hidden",n!==1);
+  $("v-list").classList.toggle("hidden",n!==2);
+  $("v-out").classList.toggle("hidden",n!==3);
+  $("v-set").classList.toggle("hidden",n!==4);
+  $("t1").setAttribute("aria-pressed",n===1?"true":"false");
+  $("t2").setAttribute("aria-pressed",n===2?"true":"false");
+  $("t3").setAttribute("aria-pressed",n===3?"true":"false");
+  $("t4").setAttribute("aria-pressed",n===4?"true":"false");
+  if(n===2) renderList();
+  if(n===3) renderPreview();
+}
+
+/* ---- init ---- */
+(function init(){
+  loadSettings(); loadRecords();
+
+  if(!supported()){
+    $("unsupported").classList.remove("hidden");
+    $("toggleBtn").disabled=true;
+  }
+
+  $("wakeInput").value=wakeWord;
+  $("ttsToggle").checked=ttsOn;
+  renderSubjChips(); renderQuickRef(); renderLast(); updateStage();
+
+  $("pickDate").value=todayStr();
+  $("pickDate2").value=todayStr();
+  $("addDate").value=todayStr();
+  $("addTime").value=nowTimeStr();
+
+  $("toggleBtn").addEventListener("click",function(){ if(listening) stopListening(); else startListening(); });
+  $("cancelBtn").addEventListener("click",cancelCapture);
+
+  $("t1").addEventListener("click",function(){ tab(1); });
+  $("t2").addEventListener("click",function(){ tab(2); });
+  $("t3").addEventListener("click",function(){ tab(3); });
+  $("t4").addEventListener("click",function(){ tab(4); });
+
+  $("rangeSel").addEventListener("change",function(){
+    range1=$("rangeSel").value;
+    $("pickWrap").classList.toggle("hidden", range1!=="pick");
+    renderList();
+  });
+  $("pickDate").addEventListener("change",function(){ pick1=$("pickDate").value; renderList(); });
+
+  $("rangeSel2").addEventListener("change",function(){
+    range2=$("rangeSel2").value;
+    $("pickWrap2").classList.toggle("hidden", range2!=="pick");
+    renderPreview();
+  });
+  $("pickDate2").addEventListener("change",function(){ pick2=$("pickDate2").value; renderPreview(); });
+
+  $("addToggle").addEventListener("click",function(){
+    var f=$("addForm");
+    var willShow=f.classList.contains("hidden");
+    f.classList.toggle("hidden");
+    if(willShow) resetAddForm();
+  });
+  $("addSave").addEventListener("click",function(){
+    if(!addNum){ toast("出席番号を選んでください"); return; }
+    if(!addSubj){ toast("教科を選んでください"); return; }
+    var text=$("addText").value.trim();
+    if(!text){ toast("様子を書いてください"); return; }
+    records.unshift({
+      id:"r"+Date.now()+"_"+Math.floor(Math.random()*1000),
+      date:$("addDate").value||todayStr(), time:$("addTime").value||nowTimeStr(),
+      student:addNum, subject:addSubj, text:text
+    });
+    saveRecords(); lastSubject=addSubj; saveLastSubject();
+    $("addForm").classList.add("hidden");
+    renderList(); renderLast(); toast("追加しました");
+  });
+
+  $("saveCsv").addEventListener("click",function(){
+    saveFile("音声記録_"+(range2==="all"?"すべて":(range2==="pick"?pick2:todayStr()))+".csv", toCsv(exportRecords()), "CSVを保存しました");
+  });
+  $("saveJson").addEventListener("click",function(){
+    saveFile("音声記録_"+(range2==="all"?"すべて":(range2==="pick"?pick2:todayStr()))+".json", toJsonStr(exportRecords()), "JSONを保存しました");
+  });
+  $("copyTxt").addEventListener("click",function(){
+    var t=buildTxt(exportRecords());
+    function fb(){
+      var ta=document.createElement("textarea"); ta.value=t;
+      ta.style.position="fixed"; ta.style.opacity="0";
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand("copy"); toast("コピーしました"); }catch(e){ toast("コピーできません"); }
+      document.body.removeChild(ta);
+    }
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(function(){ toast("コピーしました"); },fb);
+    } else fb();
+  });
+
+  $("wakeSave").addEventListener("click",function(){
+    var v=$("wakeInput").value.trim();
+    if(!v){ toast("ウェイクワードを入力してください"); return; }
+    wakeWord=v; saveWake(); renderQuickRef(); toast("保存しました");
+  });
+  $("ttsToggle").addEventListener("change",function(){ ttsOn=$("ttsToggle").checked; saveTts(); });
+  $("newSubjAdd").addEventListener("click",function(){
+    var v=$("newSubj").value.trim();
+    if(!v){ return; }
+    if(subjects.some(function(s){return normalize(s)===normalize(v);})){ toast("すでにあります"); return; }
+    subjects.push(v); saveSubjects(); $("newSubj").value="";
+    renderSubjChips(); renderAddSubjects(); renderQuickRef(); toast("追加しました");
+  });
+
+  var wipeArmed=false, wipeTimer=null;
+  $("wipeBtn").addEventListener("click",function(){
+    if(!wipeArmed){
+      wipeArmed=true; $("wipeBtn").textContent="本当に消す（もう一度押す）";
+      wipeTimer=setTimeout(function(){ wipeArmed=false; $("wipeBtn").textContent="すべての記録を消す"; },5000);
+      return;
+    }
+    clearTimeout(wipeTimer); wipeArmed=false; $("wipeBtn").textContent="すべての記録を消す";
+    var snapshot=records.slice();
+    records=[]; saveRecords(); renderList(); renderLast();
+    undoToast("すべて消しました",function(){ records=snapshot; saveRecords(); renderList(); renderLast(); });
+  });
+
+  if("serviceWorker" in navigator && location.protocol==="https:"){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  }
+  window.addEventListener("beforeunload",function(){ try{ if(listening) stopListening(); }catch(e){} });
+})();
+})();
+</script>
+</body>
+</html>
