@@ -61,6 +61,10 @@ h2{font-size:14px;font-weight:600;color:var(--ink-2);margin:20px 0 8px}
 .phase{font-size:24px;font-weight:700;margin:8px 0 4px;text-wrap:balance}
 .readout{font-size:15px;color:var(--ink-2)}
 .readout b{color:var(--ink);font-weight:700}
+.heard{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--card);border:1px dashed var(--line);font-size:15px;text-align:left;min-height:1.6em}
+.heard .lbl{display:block;font-size:12px;color:var(--ink-2)}
+.btn.rec{background:var(--rec)}
+.btn.wait{background:var(--card);border:1px solid var(--line);color:var(--ink-2);font-weight:400}
 
 .row{display:flex;gap:8px;flex-wrap:wrap}
 .btn{background:var(--voice);color:#fff;border-radius:12px;padding:14px 18px;font-weight:700}
@@ -115,7 +119,7 @@ nav button[aria-pressed=true]{color:var(--voice);font-weight:700;box-shadow:inse
 
 <section id="v-rec">
   <h1>音声記録メモ</h1>
-  <p class="sub">「メモ」と言ってから、番号→教科→様子の順に話すと自動で記録します。</p>
+  <p class="sub">「メモ」→出席番号→教科→様子の順に話し、「記録する」を押すと保存します。</p>
 
   <div id="unsupported" class="warnbox hidden">
     この端末・ブラウザは音声認識に対応していません。iPadはSafari、Androidは最新のChromeでお試しください。「一覧」タブの「手動で追加」から直接入力もできます。
@@ -125,8 +129,10 @@ nav button[aria-pressed=true]{color:var(--voice);font-weight:700;box-shadow:inse
     <div class="status"><span class="dot"></span><span id="statusTx">停止中</span></div>
     <div class="phase" id="phaseTx">「開始」を押してください</div>
     <div class="readout" id="readoutTx"></div>
+    <div class="heard hidden" id="heardBox"><span class="lbl">聞こえた内容</span><span id="heardTx"></span></div>
   </div>
 
+  <button class="btn rec big hidden" id="recordBtn" style="padding:30px 12px;font-size:24px">記録する</button>
   <button class="btn big" id="toggleBtn">聞き取りを始める</button>
   <button class="btn ghost big hidden" id="cancelBtn" style="margin-top:8px">いまの入力を取り消す</button>
 
@@ -221,6 +227,13 @@ nav button[aria-pressed=true]{color:var(--voice);font-weight:700;box-shadow:inse
     <input type="checkbox" id="ttsToggle">
   </div>
 
+  <h2>記録の確定</h2>
+  <div class="setrow">
+    <label class="toggle" for="autoToggle">話し終えて6秒たったら自動で記録する（ふだんは「記録する」ボタンで確定）</label>
+    <input type="checkbox" id="autoToggle">
+  </div>
+  <p class="note">Bluetoothリモコン・フットスイッチ・キーボードのスペース、Enter、矢印、PageUp／PageDownキーは「記録する」ボタンと同じ働きをします。待機中に押すと「メモ」と言ったのと同じになります。</p>
+
   <h2>教科の一覧</h2>
   <div class="chips" id="subjChips" style="margin-bottom:10px"></div>
   <div class="row">
@@ -232,7 +245,7 @@ nav button[aria-pressed=true]{color:var(--voice);font-weight:700;box-shadow:inse
   </div>
 
   <h2>使い方のメモ</h2>
-  <p class="note">出席番号は1〜8のみ対応しています。「さん」「3」「3番」のように話してください。教科を言わなければ、直前に使った教科のまま記録します。話した内容の書き起こしは自動なので、あとで一覧タブから文章を直せます。認識には通信環境が必要です。iPadはマイクの使用を許可してください。</p>
+  <p class="note">出席番号は1〜8のみ対応しています。「さん」「3」「3番」のように話してください。教科を言わなければ、直前に使った教科のまま記録します。読み上げのあとに「ピッ」と鳴ってから話すと取りこぼしません。様子を話し終えたら「記録する」を押すか、次の「メモ」を言うと保存されます。話した内容の書き起こしは自動なので、あとで一覧タブから文章を直せます。認識には通信環境が必要です。iPadはマイクの使用を許可してください。</p>
 
   <h2 style="color:var(--rec)">記録の削除</h2>
   <button class="btn danger" id="wipeBtn">すべての記録を消す</button>
@@ -305,16 +318,18 @@ function undoToast(m,fn){
 }
 
 /* ---- storage ---- */
-var subjects=[]; var wakeWord="メモ"; var ttsOn=true; var lastSubject=null; var records=[];
+var subjects=[]; var wakeWord="メモ"; var ttsOn=true; var autoSave=false; var lastSubject=null; var records=[];
 function loadSettings(){
   try{ var s=JSON.parse(localStorage.getItem("vk:subjects")||"null"); subjects=(s&&s.length)?s:DEFAULT_SUBJECTS.slice(); }catch(e){ subjects=DEFAULT_SUBJECTS.slice(); }
   try{ wakeWord=localStorage.getItem("vk:wake")||"メモ"; }catch(e){ wakeWord="メモ"; }
   try{ ttsOn=localStorage.getItem("vk:tts")!=="0"; }catch(e){ ttsOn=true; }
+  try{ autoSave=localStorage.getItem("vk:auto")==="1"; }catch(e){ autoSave=false; }
   try{ lastSubject=localStorage.getItem("vk:lastSubject")||null; }catch(e){ lastSubject=null; }
 }
 function saveSubjects(){ try{ localStorage.setItem("vk:subjects",JSON.stringify(subjects)); }catch(e){} }
 function saveWake(){ try{ localStorage.setItem("vk:wake",wakeWord); }catch(e){} }
 function saveTts(){ try{ localStorage.setItem("vk:tts",ttsOn?"1":"0"); }catch(e){} }
+function saveAuto(){ try{ localStorage.setItem("vk:auto",autoSave?"1":"0"); }catch(e){} }
 function saveLastSubject(){ try{ localStorage.setItem("vk:lastSubject",lastSubject||""); }catch(e){} }
 function loadRecords(){
   try{ records=JSON.parse(localStorage.getItem("vk:records")||"[]")||[]; }catch(e){ records=[]; }
@@ -353,34 +368,50 @@ function matchSubject(text){
 /* ---- speech recognition state machine ---- */
 var Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 function supported(){ return !!Recognition; }
-var recognition=null, listening=false, manualStop=false, ttsBusy=false, restartFails=0;
-var phase="idle", curStudent=null, curSubject=null, buffer=[];
+var recognition=null, listening=false, manualStop=false, ttsBusy=false, holdRestart=false, restartFails=0;
+var phase="idle", curStudent=null, curSubject=null, buffer=[], interimText="", flushing=false;
 var phaseTimer=null, silenceTimer=null, wakeLock=null;
 
 function buildRecognition(){
   var r=new Recognition();
-  r.lang="ja-JP"; r.continuous=true; r.interimResults=false; r.maxAlternatives=1;
+  r.lang="ja-JP"; r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
   r.onresult=onResult; r.onerror=onRecError; r.onend=onRecEnd;
   return r;
 }
+function canRun(){ return listening && !manualStop && !ttsBusy && !holdRestart; }
+function resumeRec(readyBeep){
+  holdRestart=false;
+  if(!listening||manualStop||ttsBusy) return;
+  interimText="";
+  try{ recognition=buildRecognition(); recognition.start(); if(readyBeep) beep(1320,60); }
+  catch(e){ setTimeout(function(){ if(canRun()) resumeRec(false); },400); }
+}
+/* 認識を捨ててすぐ再開（確定済みの内容が後から重複して届くのを防ぐ） */
+function restartFresh(){
+  holdRestart=true;
+  try{ if(recognition){ recognition.abort?recognition.abort():recognition.stop(); } }catch(e){}
+  setTimeout(function(){ resumeRec(false); },250);
+}
 function startListening(){
   if(!supported()){ toast("この端末では音声認識できません"); return; }
-  manualStop=false; restartFails=0;
+  manualStop=false; holdRestart=false; restartFails=0; interimText="";
   try{ recognition=buildRecognition(); recognition.start(); }
   catch(e){ toast("開始できませんでした"); return; }
   listening=true; lockScreen(); updateStage();
   $("toggleBtn").textContent="聞き取りを終える";
 }
 function stopListening(){
+  // 話しかけの途中なら、捨てずに保存してから止める
+  if(phase==="subject"||phase==="content"){ finalizeRecord(true); }
   manualStop=true; listening=false;
   try{ if(recognition) recognition.stop(); }catch(e){}
   clearTimeout(phaseTimer); clearTimeout(silenceTimer);
-  phase="idle"; curStudent=null; curSubject=null; buffer=[];
+  phase="idle"; curStudent=null; curSubject=null; buffer=[]; interimText="";
   releaseScreen(); updateStage();
   $("toggleBtn").textContent="聞き取りを始める";
 }
 function onRecEnd(){
-  if(!listening||manualStop||ttsBusy) return;
+  if(!canRun()) return;
   restartFails++;
   if(restartFails>8){
     listening=false; releaseScreen();
@@ -389,11 +420,7 @@ function onRecEnd(){
     updateStage();
     return;
   }
-  setTimeout(function(){
-    if(!listening||manualStop||ttsBusy) return;
-    try{ recognition=buildRecognition(); recognition.start(); }
-    catch(e){ onRecEnd(); }
-  },300);
+  setTimeout(function(){ if(canRun()) resumeRec(false); },300);
 }
 function onRecError(e){
   if(e && (e.error==="not-allowed"||e.error==="service-not-allowed")){
@@ -404,89 +431,178 @@ function onRecError(e){
   }
 }
 function onResult(e){
+  var interim="";
   for(var i=e.resultIndex;i<e.results.length;i++){
-    if(!e.results[i].isFinal) continue;
-    restartFails=0;
-    var text=(e.results[i][0]&&e.results[i][0].transcript||"").trim();
-    if(text) handlePhrase(text);
+    var t=(e.results[i][0]&&e.results[i][0].transcript||"").trim();
+    if(!t) continue;
+    if(e.results[i].isFinal){ restartFails=0; interimText=""; handlePhrase(t); }
+    else interim+=t;
   }
+  interimText=interim;
+  if(interim){
+    restartFails=0;
+    // 話している最中は待ち時間を延ばす
+    if(phase==="number"||phase==="subject") resetPhaseTimer(12000);
+    if(phase==="content" && autoSave) resetSilenceTimer();
+  }
+  updateHeard();
 }
 
+function pushContent(t){
+  var n=normalize(t); if(!n) return;
+  var last=buffer.length?normalize(buffer[buffer.length-1]):"";
+  if(last && (n===last || last.indexOf(n)>=0)) return;      // 同じ内容の重複
+  if(last && n.indexOf(last)===0){ buffer[buffer.length-1]=t; return; } // 前の続きを含む
+  buffer.push(t);
+}
 function handlePhrase(text){
   if(isWake(text)){
-    if(phase==="content") finalizeRecord();
+    if(phase==="subject"||phase==="content") finalizeRecord(true);
     beginCapture();
+    // 「メモ3番」のように続けて話した場合
+    var rest=String(text).replace(/^[\s　、。]*/,"").slice(wakeWord.length);
+    if(normalize(rest)) handlePhrase(rest);
     return;
   }
   if(phase==="idle") return;
   if(phase==="number"){
     var n=parseNumber(text);
-    if(n){ curStudent=n; phase="subject"; resetPhaseTimer(8000); speakConfirm(n+"ばん"); updateStage(); }
+    if(n){ curStudent=n; phase="subject"; resetPhaseTimer(12000); speakConfirm(n+"ばん"); updateStage(); }
     else toast("番号が聞き取れませんでした（1〜8）");
     return;
   }
   if(phase==="subject"){
+    clearTimeout(phaseTimer);
     var matched=matchSubject(text);
-    if(matched){
+    var nt=normalize(text), nm=matched?normalize(matched):"";
+    if(matched && nt.length<=nm.length+2){
       curSubject=matched; lastSubject=matched; saveLastSubject();
-      phase="content"; buffer=[]; resetSilenceTimer(); speakConfirm(matched); updateStage();
+      phase="content"; buffer=[];
+      speakConfirm(matched);
+    }else if(matched && nt.indexOf(nm)===0){
+      // 「音楽、鈴を鳴らした」のように教科と様子を続けて話した場合
+      curSubject=matched; lastSubject=matched; saveLastSubject();
+      phase="content"; buffer=[];
+      var idx=String(text).indexOf(matched);
+      pushContent(idx>=0?String(text).slice(idx+matched.length).replace(/^[\s　、。,]+/,""):text);
+      speakConfirm(matched);
     }else{
       curSubject=lastSubject||subjects[0]||"記録";
-      phase="content"; buffer=[text]; resetSilenceTimer();
-      speakConfirm(curSubject); updateStage();
+      phase="content"; buffer=[]; pushContent(text);
+      speakConfirm(curSubject);
     }
+    if(autoSave) resetSilenceTimer();
+    updateStage();
     return;
   }
   if(phase==="content"){
-    buffer.push(text);
-    resetSilenceTimer();
+    pushContent(text);
+    if(autoSave) resetSilenceTimer();
     updateStage();
     return;
   }
 }
 function beginCapture(){
   clearTimeout(phaseTimer); clearTimeout(silenceTimer);
-  phase="number"; curStudent=null; curSubject=null; buffer=[];
+  phase="number"; curStudent=null; curSubject=null; buffer=[]; interimText="";
   beep(880,90); buzz(60);
-  resetPhaseTimer(8000);
+  resetPhaseTimer(12000);
   updateStage();
 }
 function resetPhaseTimer(ms){
   clearTimeout(phaseTimer);
   phaseTimer=setTimeout(function(){
-    if(phase==="number"||phase==="subject"){
-      toast("反応がないため待機に戻りました");
-      phase="idle"; curStudent=null; curSubject=null; buffer=[];
+    if(phase==="number"){
+      toast("番号が聞こえなかったため待機に戻りました");
+      phase="idle"; curStudent=null; curSubject=null; buffer=[]; interimText="";
       updateStage();
+    }else if(phase==="subject"){
+      // 何か聞こえていれば捨てずに様子として扱う
+      if(interimText){
+        curSubject=lastSubject||subjects[0]||"記録";
+        phase="content"; updateStage();
+      }else if(!autoSave){
+        curSubject=lastSubject||subjects[0]||"記録";
+        phase="content"; updateStage();
+      }else{
+        toast("様子が聞こえなかったため待機に戻りました");
+        phase="idle"; curStudent=null; curSubject=null; buffer=[]; interimText="";
+        updateStage();
+      }
     }
   },ms);
 }
 function resetSilenceTimer(){
   clearTimeout(silenceTimer);
-  silenceTimer=setTimeout(finalizeRecord,6000);
+  silenceTimer=setTimeout(function(){
+    if(!finalizeRecord(false)) { toast("様子が聞き取れませんでした"); }
+  },6000);
 }
-function finalizeRecord(){
+function pendingText(){
+  var parts=buffer.slice();
+  if(interimText){
+    var n=normalize(interimText), last=parts.length?normalize(parts[parts.length-1]):"";
+    if(!(last && last.indexOf(n)>=0)) parts.push(interimText);
+  }
+  var joined=parts.join("。").replace(/。{2,}/g,"。").trim();
+  // 教科名だけしか聞こえていない場合は様子なしとみなす
+  if(phase==="subject" && joined && normalize(joined)===normalize(matchSubject(joined)||"\u0000")) return "";
+  return joined;
+}
+/* 保存できたら true。silent=true のときは失敗しても知らせない */
+function finalizeRecord(silent){
   clearTimeout(silenceTimer); clearTimeout(phaseTimer);
-  if(phase==="content" && buffer.length && curStudent && curSubject){
-    var joined=buffer.join("。").trim();
-    if(joined && !/[。.！？!?]$/.test(joined)) joined+="。";
+  var text=pendingText();
+  var ok=false;
+  if((phase==="subject"||phase==="content") && text && curStudent){
+    if(!curSubject) curSubject=lastSubject||subjects[0]||"記録";
+    if(!/[。.！？!?]$/.test(text)) text+="。";
     var rec={
       id:"r"+Date.now()+"_"+Math.floor(Math.random()*1000),
       date:todayStr(), time:nowTimeStr(),
-      student:curStudent, subject:curSubject, text:joined
+      student:curStudent, subject:curSubject, text:text
     };
     records.unshift(rec); saveRecords();
     beep(420,150); buzz([50,40,50]);
     toast(rec.student+"番・"+rec.subject+"を記録しました");
     renderLast(); renderListIfVisible();
+    ok=true;
   }
-  phase="idle"; curStudent=null; curSubject=null; buffer=[];
+  phase="idle"; curStudent=null; curSubject=null; buffer=[]; interimText="";
   updateStage();
+  return ok;
+}
+/* 「記録する」ボタン・リモコンキー */
+function commitByButton(){
+  if(flushing) return;
+  if(!listening){ toast("先に「聞き取りを始める」を押してください"); return; }
+  if(phase==="idle"){ beginCapture(); return; }
+  if(phase==="number"){ beep(300,120); toast("先に出席番号を話してください"); return; }
+  if(pendingText()){
+    finalizeRecord(false);
+    if(listening) restartFresh();
+    return;
+  }
+  // まだ文字になっていない声を確定させてから保存する
+  flushing=true; updateStage(); toast("確認しています…");
+  holdRestart=true;
+  try{ if(recognition) recognition.stop(); }catch(e){}
+  setTimeout(function(){
+    flushing=false;
+    if(pendingText()){ finalizeRecord(false); }
+    else{
+      beep(300,160); buzz([80,60,80]);
+      toast("様子が聞き取れていません。もう一度話してから押してください");
+      updateStage();
+    }
+    resumeRec(false);
+  },1200);
 }
 function cancelCapture(){
   clearTimeout(phaseTimer); clearTimeout(silenceTimer);
-  phase="idle"; curStudent=null; curSubject=null; buffer=[];
+  phase="idle"; curStudent=null; curSubject=null; buffer=[]; interimText="";
   toast("取り消しました"); updateStage();
+  if(listening) restartFresh();
 }
 
 /* ---- text-to-speech confirm ---- */
@@ -495,16 +611,15 @@ function speakConfirm(text){
   try{
     ttsBusy=true;
     try{ if(recognition) recognition.stop(); }catch(e){}
+    var done=false;
     var u=new SpeechSynthesisUtterance(text);
-    u.lang="ja-JP"; u.rate=1.05; u.volume=0.85;
-    u.onend=u.onerror=function(){
-      ttsBusy=false;
-      if(listening && !manualStop){
-        try{ recognition=buildRecognition(); recognition.start(); }catch(e){}
-      }
-    };
+    u.lang="ja-JP"; u.rate=1.15; u.volume=0.85;
+    var fin=function(){ if(done) return; done=true; ttsBusy=false; resumeRec(true); };
+    u.onend=fin; u.onerror=fin;
+    setTimeout(fin,3000); // 読み上げが終わった通知が来ない端末への保険
+    speechSynthesis.cancel();
     speechSynthesis.speak(u);
-  }catch(e){ ttsBusy=false; }
+  }catch(e){ ttsBusy=false; resumeRec(false); }
 }
 
 /* ---- screen wake lock ---- */
@@ -515,6 +630,15 @@ document.addEventListener("visibilitychange",function(){
 });
 
 /* ---- stage rendering ---- */
+function updateHeard(){
+  var show=listening && phase!=="idle";
+  $("heardBox").classList.toggle("hidden",!show);
+  if(!show) return;
+  var t;
+  if(phase==="number") t=interimText||"（番号を待っています）";
+  else t=pendingText()||interimText||"（まだ聞こえていません）";
+  $("heardTx").textContent=t;
+}
 function updateStage(){
   var st=$("stage");
   st.classList.remove("busy","hot");
@@ -529,7 +653,8 @@ function updateStage(){
       st.classList.add("busy");
     }
     else if(phase==="content"){
-      statusTx="記録中"; phaseTx="様子を話してください";
+      statusTx="記録中";
+      phaseTx=autoSave?"様子を話してください":"様子を話して「記録する」";
       readout="<b>"+curStudent+"番・"+curSubject+"</b>";
       st.classList.add("hot");
     }
@@ -538,6 +663,15 @@ function updateStage(){
   $("phaseTx").textContent=phaseTx;
   $("readoutTx").innerHTML=readout;
   $("cancelBtn").classList.toggle("hidden", !(listening&&(phase==="number"||phase==="subject"||phase==="content")));
+
+  var rb=$("recordBtn");
+  rb.classList.toggle("hidden",!listening);
+  rb.classList.remove("rec","wait","ghost");
+  if(flushing){ rb.textContent="確認しています…"; rb.classList.add("wait"); }
+  else if(phase==="idle"){ rb.textContent="記録を始める（「"+wakeWord+"」と同じ）"; rb.classList.add("ghost"); }
+  else if(phase==="number"){ rb.textContent="出席番号を話してください"; rb.classList.add("wait"); }
+  else { rb.textContent="記録する"; rb.classList.add("rec"); }
+  updateHeard();
 }
 function renderLast(){
   if(!records.length){ $("lastWrap").classList.add("hidden"); return; }
@@ -725,6 +859,7 @@ function tab(n){
 
   $("wakeInput").value=wakeWord;
   $("ttsToggle").checked=ttsOn;
+  $("autoToggle").checked=autoSave;
   renderSubjChips(); renderQuickRef(); renderLast(); updateStage();
 
   $("pickDate").value=todayStr();
@@ -734,6 +869,17 @@ function tab(n){
 
   $("toggleBtn").addEventListener("click",function(){ if(listening) stopListening(); else startListening(); });
   $("cancelBtn").addEventListener("click",cancelCapture);
+  $("recordBtn").addEventListener("click",function(){ commitByButton(); try{ $("recordBtn").blur(); }catch(e){} });
+  var REMOTE_KEYS=[" ","Enter","PageDown","PageUp","ArrowRight","ArrowLeft","ArrowDown","ArrowUp"];
+  document.addEventListener("keydown",function(e){
+    var tag=(e.target&&e.target.tagName||"").toLowerCase();
+    if(tag==="input"||tag==="textarea"||tag==="select") return;
+    if(!listening || $("v-rec").classList.contains("hidden")) return;
+    if(REMOTE_KEYS.indexOf(e.key)<0) return;
+    if(e.repeat){ e.preventDefault(); return; }
+    e.preventDefault();
+    commitByButton();
+  });
 
   $("t1").addEventListener("click",function(){ tab(1); });
   $("t2").addEventListener("click",function(){ tab(2); });
@@ -801,6 +947,7 @@ function tab(n){
     wakeWord=v; saveWake(); renderQuickRef(); toast("保存しました");
   });
   $("ttsToggle").addEventListener("change",function(){ ttsOn=$("ttsToggle").checked; saveTts(); });
+  $("autoToggle").addEventListener("change",function(){ autoSave=$("autoToggle").checked; saveAuto(); updateStage(); });
   $("newSubjAdd").addEventListener("click",function(){
     var v=$("newSubj").value.trim();
     if(!v){ return; }
@@ -825,6 +972,7 @@ function tab(n){
   if("serviceWorker" in navigator && location.protocol==="https:"){
     navigator.serviceWorker.register("sw.js").catch(function(){});
   }
+  window.addEventListener("pagehide",function(){ try{ if(listening) stopListening(); }catch(e){} });
   window.addEventListener("beforeunload",function(){ try{ if(listening) stopListening(); }catch(e){} });
 })();
 })();

@@ -1,5 +1,5 @@
 /* 音声記録メモ service worker: 画面は最新を優先して取得し、つながらない時は保存済みの画面を出す */
-var CACHE = "onsei-kiroku-v1";
+var CACHE = "onsei-kiroku-v2";
 var FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }));
